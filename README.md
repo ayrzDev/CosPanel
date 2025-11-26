@@ -1,41 +1,96 @@
-# 🚧 Coming Soon: [Servura]
+# UmixPanel Monorepo
 
-Yeni nesil web kontrol paneli yakında burada!  
-Modern, hafif ve esnek yapısıyla, yaygın olarak desteklenmeyen sunucu yapılarına bile sorunsuz uyum sağlayacak şekilde tasarlanıyor.  
-Karmaşık yapılandırmalarla uğraşmadan, tüm web barındırma ihtiyaçlarınızı kolayca yönetin.
+Bu depo, cPanel benzeri bir panelin monorepo mimarisinde (pnpm workspaces) referans uygulamasıdır. Üretim amaçlı değildir; mimari, güvenlik, test ve DevOps örneklerini bütünlüklü olarak gösterir.
 
-## 🎯 Projenin Amacı
+## Kurulum
 
-Bu proje; sistem yöneticilerine, geliştiricilere ve sunucu sahiplerine şunları sunmayı hedeflemektedir:
+```powershell
+# pnpm global kurulum (eğer yoksa)
+npm install -g pnpm
 
-- 🌐 Modern ve kullanıcı dostu arayüz
-- 🧩 Modüler yapı – sadece ihtiyacın olan özellikleri kullan
-- 🔧 FTP, veritabanı, DNS, e-posta yönetimi gibi temel sunucu görevlerini basitleştirme
-- ❌ Desteklenmeyen veya özel yapılandırılmış sunucularla uyumluluk
-- 🚀 Hızlı kurulum, minimum sistem gereksinimi
+# Bağımlılıkları yükle
+pnpm install
 
-## 📦 Özellikler (Planlanan)
+# Prisma client oluştur
+cd apps/api
+npx prisma generate
+cd ../..
+```
 
-- Web barındırma yönetimi (multi-domain desteği ile)
-- Dosya yöneticisi ve FTP kontrolü
-- Veritabanı yönetimi (MySQL, PostgreSQL vs.)
-- SSL yönetimi
-- E-posta hesapları ve yönlendirmeleri
-- Sunucu kaynak takibi
-- Basit ve açık API entegrasyonu
+## Çalıştırma
 
-## 🔜 Ne Zaman?
+### Yerel Geliştirme (Docker olmadan)
 
-İlk açık beta sürüm, 2025 içinde yayınlanması planlanmaktadır.  
-Gelişmeler ve erken erişim için bizi takip edin!
+```powershell
+# PostgreSQL ve Redis'in çalıştığından emin ol (docker-compose veya yerel)
+# .env dosyalarını kopyala
+copy apps\api\.env.example apps\api\.env
+copy apps\web\.env.example apps\web\.env
+copy apps\admin\.env.example apps\admin\.env
 
-## 📫 İletişim
+# Prisma migrate (ilk kez)
+pnpm prisma:migrate
 
-Her türlü soru, öneri ya da katkı için bize ulaşabilirsiniz:  
-📧 youremail@example.com  
-🌐 [proje-linki-gelecek.com]
+# Seed verilerini ekle
+pnpm prisma:seed
 
----
+# Tüm uygulamaları paralel çalıştır
+pnpm dev
+```
 
-> Bu kontrol paneli, özgürlük ve esneklik isteyen kullanıcılar için geliyor.  
-> Kısıtlamaları unutun. Kontrol tamamen sizde! ⚡
+### Docker Compose ile
+
+```powershell
+# Tüm servisleri ayağa kaldır (postgres, redis, api, web, admin, traefik, prometheus, grafana)
+docker-compose up --build
+```
+
+## Erişim
+
+- **Web Panel**: http://localhost:3000
+- **Admin Panel**: http://localhost:3002
+- **API**: http://localhost:3001
+- **API Docs (Swagger)**: http://localhost:3001/docs
+- **Prometheus Metrics**: http://localhost:3001/metrics/prometheus
+- **Prometheus**: http://localhost:9090
+- **Grafana**: http://localhost:3003 (admin/admin)
+- **Traefik Dashboard**: http://localhost:8080
+
+## Komutlar
+
+- `pnpm dev` — tüm uygulamaları aynı anda geliştirici modunda çalıştırır
+- `pnpm build` — tüm paketleri derler
+- `pnpm test` — birim ve e2e testlerini çalıştırır
+- `pnpm lint` — tüm projelerde lint çalıştırır
+- `pnpm e2e` — Playwright e2e testleri
+- `pnpm prisma:migrate` — Prisma migration çalıştırır
+- `pnpm prisma:seed` — Örnek verileri yükler
+
+## Seed Kullanıcıları
+
+| Email | Şifre | Rol |
+|-------|-------|-----|
+| root@umixpanel.local | rootpass | ROOT |
+| admin1@umixpanel.local | adminpass | ADMIN |
+| admin2@umixpanel.local | adminpass | ADMIN |
+| reseller@umixpanel.local | resellerpass | RESELLER |
+| user1@umixpanel.local | userpass | USER |
+| user2@umixpanel.local | userpass | USER |
+
+## Yapı
+
+```
+├── apps/
+│   ├── api/          # NestJS API (REST + WebSocket)
+│   ├── web/          # Next.js Müşteri Paneli
+│   └── admin/        # Next.js Admin Paneli
+├── packages/
+│   ├── config/       # Paylaşılan ESLint, Tailwind, TS configleri, env şemaları
+│   ├── types/        # Ortak TypeScript tipleri, DTO'lar, RBAC izinleri
+│   └── ui/           # Paylaşılan UI bileşenleri (Button, Card, CodeLog, vs.)
+├── docker/           # Traefik ve reverse proxy configleri
+├── ops/              # Prometheus, Grafana configleri
+└── docs/             # Mimari, güvenlik, ops dokümantasyonu
+```
+
+Detaylar için `Architecture.md`, `Security.md`, `Ops.md` dosyalarına ve uygulama/paket README'lerine bakınız.

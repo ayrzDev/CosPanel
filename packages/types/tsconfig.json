@@ -1,0 +1,4 @@
+{
+  "extends": "../config/src/tsconfig.lib.json",
+  "include": ["src"]
+}

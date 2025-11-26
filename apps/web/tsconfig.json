@@ -1,0 +1,29 @@
+{
+  "extends": "../../packages/config/src/tsconfig.next.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@umixpanel/ui/*": [
+        "../../packages/ui/src/*"
+      ],
+      "@umixpanel/config/*": [
+        "../../packages/config/src/*"
+      ],
+      "@umixpanel/types/*": [
+        "../../packages/types/src/*"
+      ]
+    },
+    "incremental": true,
+    "isolatedModules": true
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

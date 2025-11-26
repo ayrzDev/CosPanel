@@ -1,0 +1,12 @@
+{
+  "title": "UmixPanel",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Service Up",
+      "targets": [
+  { "expr": "umixpanel_up" }
+      ]
+    }
+  ]
+}

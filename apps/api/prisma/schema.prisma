@@ -1,0 +1,747 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  twoFASecret  String?  @db.VarChar(255)
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+  accounts     Account[] @relation("UserAccounts")
+  apiTokens    ApiToken[]
+  customers    Customer[] @relation("AdminCustomers") // Admin → Customers
+  servers      Server[] @relation("AdminServers") // Admin → Servers
+  sessions     Session[] // User sessions for token tracking
+}
+
+model Session {
+  id            String   @id @default(uuid())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  
+  token         String   @unique @db.VarChar(500) // JWT token
+  tokenType     String   @default("ACCESS") @db.VarChar(50) // ACCESS, REFRESH
+  
+  ipAddress     String?  @db.VarChar(45) // IPv4 or IPv6
+  userAgent     String?  @db.VarChar(500)
+  
+  isActive      Boolean  @default(true)
+  expiresAt     DateTime
+  lastUsedAt    DateTime @default(now())
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([userId])
+  @@index([customerId])
+  @@index([token])
+  @@index([expiresAt])
+  @@index([isActive])
+}
+
+model Account {
+  id        String   @id @default(uuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], name: "UserAccounts")
+  plan      Plan
+  status    String
+  createdAt DateTime @default(now())
+  domains   Domain[]
+  sites     Site[]
+  backups   Backup[]
+  emailAccounts     EmailAccount[]
+  emailForwarders   EmailForwarder[]
+  emailAutoresponders EmailAutoresponder[]
+  emailFilters      EmailFilter[]
+  managedDatabases  ManagedDatabase[]
+  ftpAccounts       FTPAccount[]
+  diskUsage         DiskUsage?
+  blockedIPs        BlockedIP[]
+  firewallRules     FirewallRule[]
+  bandwidthMetrics  BandwidthMetric[]
+  cronJobs          CronJob[]
+  terminalSessions  TerminalSession[]
+  customerId        String?
+  customer          Customer? @relation(fields: [customerId], references: [id])
+  homeDirectory     String?   @db.VarChar(255) // /home/username
+}
+
+model Domain {
+  id                String   @id @default(uuid())
+  accountId         String
+  account           Account  @relation(fields: [accountId], references: [id])
+  
+  // Customer Relation (for hosting domains)
+  customerId        String?
+  customer          Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  
+  // Domain Information
+  fqdn              String   @unique // Fully Qualified Domain Name
+  domainType        DomainType? @default(ADDON)
+  isPrimary         Boolean  @default(false)
+  
+  // Parent domain for subdomains
+  parentDomainId    String?
+  parentDomain      Domain?  @relation("Subdomains", fields: [parentDomainId], references: [id], onDelete: Cascade)
+  subdomains        Domain[] @relation("Subdomains")
+  
+  // Document Root
+  documentRoot      String?  @db.VarChar(500) // public_html/blog
+  
+  // SSL Configuration
+  sslStatus         SSLStatus @default(NONE)
+  sslProvider       String?  @db.VarChar(100) // Let's Encrypt, Custom, etc.
+  sslExpiryDate     DateTime?
+  autoRenewSsl      Boolean  @default(true)
+  
+  // DNS & Status
+  isActive          Boolean  @default(true)
+  dnsConfigured     Boolean  @default(false)
+  
+  // Redirect Settings
+  redirectTo        String?  @db.VarChar(500)
+  redirectType      Int?     // 301, 302
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime? @updatedAt
+  expiresAt         DateTime? // Domain expiry date
+  
+  // Relations
+  sslCertificates   SSLCertificate[]
+  visitorMetrics    VisitorMetric[]
+  errorLogs         ErrorLog[]
+  
+  @@index([customerId])
+  @@index([domainType])
+  @@index([isPrimary])
+  @@index([isActive])
+}
+
+model Site {
+  id           String   @id @default(uuid())
+  accountId    String
+  account      Account  @relation(fields: [accountId], references: [id])
+  name         String
+  framework    Framework
+  repoUrl      String?
+  deployBranch String?
+  createdAt    DateTime @default(now())
+}
+
+model Job {
+  id         String   @id @default(uuid())
+  type       String
+  payload    Json
+  status     JobStatus @default(QUEUED)
+  error      String?
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+}
+
+model Backup {
+  id        String   @id @default(uuid())
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id])
+  scope     BackupScope
+  location  String
+  status    JobStatus
+  createdAt DateTime @default(now())
+}
+
+model Metric {
+  id    String  @id @default(uuid())
+  key   String
+  value Float
+  ts    DateTime @default(now())
+  @@index([key, ts])
+}
+
+model ApiToken {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  name       String
+  hash       String
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+enum Role {
+  ROOT
+  ADMIN
+  RESELLER
+  USER
+}
+
+enum Plan {
+  BASIC
+  PRO
+  AGENCY
+}
+
+enum SSLStatus {
+  NONE
+  PENDING
+  ACTIVE
+  ERROR
+}
+
+enum Framework {
+  next
+  node
+  static
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  FAILED
+  COMPLETED
+}
+
+enum BackupScope {
+  db
+  files
+  full
+}
+
+// ==================== EMAIL MODELS ====================
+
+model EmailAccount {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  email       String   @unique
+  password    String
+  quota       Int      @default(250) // MB
+  usedSpace   Int      @default(0)   // MB
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+model EmailForwarder {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  source      String
+  destination String
+  createdAt   DateTime @default(now())
+
+  @@index([accountId])
+}
+
+model EmailAutoresponder {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  email       String
+  subject     String
+  body        String   @db.Text
+  startDate   DateTime?
+  endDate     DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+model EmailFilter {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name        String
+  condition   String   // JSON: {field, operator, value}
+  action      String   // JSON: {type, value}
+  order       Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([accountId])
+}
+
+// ==================== DATABASE MODELS ====================
+
+model ManagedDatabase {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name        String
+  type        DatabaseType
+  host        String   @default("localhost")
+  port        Int
+  username    String
+  password    String
+  size        Int      @default(0) // MB
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       DatabaseUser[]
+  privileges  DatabasePrivilege[]
+
+  @@unique([accountId, name])
+  @@index([accountId])
+}
+
+model DatabaseUser {
+  id          String   @id @default(uuid())
+  databaseId  String
+  database    ManagedDatabase @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+  username    String
+  password    String
+  host        String   @default("localhost")
+  createdAt   DateTime @default(now())
+
+  privileges  DatabasePrivilege[]
+
+  @@unique([databaseId, username])
+  @@index([databaseId])
+}
+
+model DatabasePrivilege {
+  id          String   @id @default(uuid())
+  databaseId  String
+  database    ManagedDatabase @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+  userId      String
+  user        DatabaseUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  privileges  String   @default("ALL") // ALL, SELECT, INSERT, UPDATE, DELETE, etc.
+  createdAt   DateTime @default(now())
+
+  @@unique([databaseId, userId])
+  @@index([databaseId])
+  @@index([userId])
+}
+
+enum DatabaseType {
+  MYSQL
+  POSTGRESQL
+}
+
+// ==================== SECURITY MODELS ====================
+
+model SSLCertificate {
+  id          String   @id @default(uuid())
+  domainId    String
+  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  type        SSLType
+  certificate String   @db.Text
+  privateKey  String   @db.Text
+  chain       String?  @db.Text
+  validFrom   DateTime
+  validUntil  DateTime
+  autoRenew   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([domainId])
+}
+
+model BlockedIP {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  ipAddress   String
+  reason      String?
+  expiresAt   DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([accountId])
+  @@index([ipAddress])
+}
+
+model FirewallRule {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name        String
+  port        Int
+  protocol    String   // TCP, UDP, BOTH
+  source      String?  // IP range
+  action      String   // ALLOW, DENY
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([accountId])
+}
+
+enum SSLType {
+  LETS_ENCRYPT
+  CUSTOM
+  SELF_SIGNED
+}
+
+// ==================== FILES & FTP MODELS ====================
+
+model FTPAccount {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  username    String   @unique
+  password    String
+  directory   String
+  quota       Int      @default(0) // MB, 0 = unlimited
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+model DiskUsage {
+  id          String   @id @default(uuid())
+  accountId   String   @unique
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  totalSpace  Int      // MB
+  usedSpace   Int      // MB
+  fileCount   Int      @default(0)
+  lastScan    DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ==================== METRICS MODELS ====================
+
+model BandwidthMetric {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  date        DateTime @db.Date
+  bytesIn     BigInt   @default(0)
+  bytesOut    BigInt   @default(0)
+  requests    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@unique([accountId, date])
+  @@index([accountId])
+  @@index([date])
+}
+
+model VisitorMetric {
+  id          String   @id @default(uuid())
+  domainId    String
+  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  date        DateTime @db.Date
+  visitors    Int      @default(0)
+  pageViews   Int      @default(0)
+  uniqueIPs   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@unique([domainId, date])
+  @@index([domainId])
+  @@index([date])
+}
+
+model ErrorLog {
+  id          String   @id @default(uuid())
+  domainId    String
+  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  statusCode  Int
+  path        String
+  message     String?  @db.Text
+  ipAddress   String
+  userAgent   String?
+  timestamp   DateTime @default(now())
+
+  @@index([domainId])
+  @@index([timestamp])
+  @@index([statusCode])
+}
+
+// ==================== ADVANCED MODELS ====================
+
+model CronJob {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  command     String   @db.Text
+  schedule    String   // Cron expression
+  isActive    Boolean  @default(true)
+  lastRun     DateTime?
+  nextRun     DateTime?
+  output      String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
+  @@index([isActive])
+}
+
+model TerminalSession {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sessionId   String   @unique
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  commands    Json     @default("[]") // Array of {timestamp, command, output}
+  isActive    Boolean  @default(true)
+
+  @@index([accountId])
+  @@index([sessionId])
+}
+
+// ==================== SERVER & IP MANAGEMENT ====================
+
+model Server {
+  id                String   @id @default(uuid())
+  adminId           String
+  admin             User     @relation(fields: [adminId], references: [id], name: "AdminServers")
+  
+  name              String   @db.VarChar(100)
+  hostname          String   @db.VarChar(255)
+  ipAddress         String   @db.VarChar(45) // IPv4/IPv6
+  
+  // Nameservers
+  nameserver1       String?  @db.VarChar(255)
+  nameserver2       String?  @db.VarChar(255)
+  nameserver3       String?  @db.VarChar(255)
+  nameserver4       String?  @db.VarChar(255)
+  
+  // Capacity
+  maxAccounts       Int      @default(100)
+  currentAccounts   Int      @default(0)
+  
+  // Status
+  isActive          Boolean  @default(true)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  customers         Customer[]
+  ipAddresses       IpAddress[]
+
+  @@index([adminId])
+  @@index([isActive])
+}
+
+model IpAddress {
+  id                String   @id @default(uuid())
+  serverId          String
+  server            Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  
+  ipAddress         String   @unique @db.VarChar(45)
+  isShared          Boolean  @default(false) // Shared IP vs Dedicated IP
+  isActive          Boolean  @default(true)
+  
+  // Assignment
+  customerId        String?  @unique
+  customer          Customer? @relation(fields: [customerId], references: [id])
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([serverId])
+  @@index([customerId])
+  @@index([isActive])
+}
+
+// ==================== CUSTOMER & HOSTING MANAGEMENT ====================
+
+model Customer {
+  id                String   @id @default(uuid())
+  adminId           String   // Admin who created this customer
+  admin             User     @relation(fields: [adminId], references: [id], name: "AdminCustomers")
+  
+  // Server Assignment
+  serverId          String?
+  server            Server?  @relation(fields: [serverId], references: [id])
+  
+  // IP Assignment
+  ipAddress         IpAddress?
+  
+  // Customer Details
+  companyName       String?  @db.VarChar(255)
+  fullName          String   @db.VarChar(255)
+  email             String   @unique
+  phone             String?  @db.VarChar(50)
+  address           String?  @db.Text
+  
+  // Hosting Details
+  username          String   @unique @db.VarChar(50) // cpanel username
+  homeDirectory     String   @db.VarChar(255) // /home/username
+  hostingPlan       HostingPlan @relation(fields: [hostingPlanId], references: [id])
+  hostingPlanId     String
+  
+  // Status
+  status            CustomerStatus @default(ACTIVE)
+  suspendReason     String?  @db.Text
+  
+  // Limits (from hosting plan)
+  diskQuotaMB       Int      @default(1024) // MB
+  bandwidthQuotaMB  Int      @default(10240) // MB
+  emailAccountLimit Int      @default(10)
+  databaseLimit     Int      @default(5)
+  ftpAccountLimit   Int      @default(5)
+  subdomainLimit    Int      @default(10)
+  
+  // Financial
+  billingCycle      BillingCycle @default(MONTHLY)
+  nextBillingDate   DateTime?
+  lastPaymentDate   DateTime?
+  totalPaid         Float    @default(0)
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  lastLogin         DateTime?
+  
+  // Relations
+  accounts          Account[]
+  invoices          Invoice[]
+  tickets           SupportTicket[]
+  domains           Domain[]
+  sessions          Session[]
+
+  @@index([adminId])
+  @@index([email])
+  @@index([username])
+  @@index([status])
+}
+
+model HostingPlan {
+  id                String   @id @default(uuid())
+  name              String   @db.VarChar(100)
+  description       String?  @db.Text
+  
+  // Resource Limits
+  diskSpaceMB       Int      // MB
+  bandwidthMB       Int      // MB per month
+  emailAccounts     Int
+  databases         Int
+  ftpAccounts       Int
+  subdomains        Int
+  addonDomains      Int
+  parkedDomains     Int
+  
+  // Features
+  features          Json     @default("[]") // ["SSL", "SSH", "Cron", "Git", etc.]
+  
+  // Pricing
+  monthlyPrice      Float
+  yearlyPrice       Float?
+  setupFee          Float    @default(0)
+  
+  // Status
+  isActive          Boolean  @default(true)
+  isPublic          Boolean  @default(true)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  customers         Customer[]
+
+  @@index([isActive, isPublic])
+}
+
+model Invoice {
+  id                String   @id @default(uuid())
+  customerId        String
+  customer          Customer @relation(fields: [customerId], references: [id])
+  
+  invoiceNumber     String   @unique
+  description       String   @db.Text
+  amount            Float
+  tax               Float    @default(0)
+  total             Float
+  
+  status            InvoiceStatus @default(PENDING)
+  dueDate           DateTime
+  paidDate          DateTime?
+  paymentMethod     String?  @db.VarChar(50)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model SupportTicket {
+  id                String   @id @default(uuid())
+  customerId        String
+  customer          Customer @relation(fields: [customerId], references: [id])
+  
+  subject           String   @db.VarChar(255)
+  message           String   @db.Text
+  priority          TicketPriority @default(MEDIUM)
+  status            TicketStatus @default(OPEN)
+  
+  category          String?  @db.VarChar(100)
+  replies           Json     @default("[]") // [{userId, message, timestamp, isAdmin}]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  closedAt          DateTime?
+
+  @@index([customerId])
+  @@index([status])
+  @@index([priority])
+}
+
+// ==================== ENUMS ====================
+
+enum DomainType {
+  PRIMARY    // Main domain with hosting
+  ADDON      // Additional domain
+  SUBDOMAIN  // Subdomain (blog.example.com)
+  PARKED     // Alias/Parked domain
+}
+
+enum CustomerStatus {
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+  PENDING
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+
+

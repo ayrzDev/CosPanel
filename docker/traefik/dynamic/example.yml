@@ -1,0 +1,21 @@
+http:
+  routers:
+    web:
+      rule: "Host(`web.localhost`)"
+      service: web
+    admin:
+      rule: "Host(`admin.localhost`)"
+      service: admin
+    api:
+      rule: "Host(`api.localhost`)"
+      service: api
+  services:
+    web:
+      loadBalancer:
+        servers: [{ url: "http://web:3000" }]
+    admin:
+      loadBalancer:
+        servers: [{ url: "http://admin:3002" }]
+    api:
+      loadBalancer:
+        servers: [{ url: "http://api:3001" }]
