@@ -34,6 +34,16 @@ async function bootstrap() {
 
   const port = Number(process.env.PORT || 3001);
   await app.listen(port);
+  // Better global logging for uncaught/unhandled errors to aid debugging
+  process.on('uncaughtException', (err: any) => {
+    // eslint-disable-next-line no-console
+    console.error('[uncaughtException]', err && err.stack ? err.stack : err);
+    process.exit(1);
+  });
+  process.on('unhandledRejection', (reason: any) => {
+    // eslint-disable-next-line no-console
+    console.error('[unhandledRejection]', reason && reason.stack ? reason.stack : reason);
+  });
   // eslint-disable-next-line no-console
   console.log(`API listening on http://localhost:${port}`);
 }

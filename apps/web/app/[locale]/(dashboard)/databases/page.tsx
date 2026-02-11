@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { apiClient } from '@/lib/api-client';
 import {
   CircleStackIcon,
   PlusIcon,
@@ -9,48 +10,97 @@ import {
   UserIcon,
   Cog6ToothIcon,
   TrashIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
 
 interface Database {
   id: string;
   name: string;
+  type: 'MySQL' | 'PostgreSQL';
   users: number;
   size: string;
-  type: 'MySQL' | 'PostgreSQL';
   createdAt: string;
 }
 
 export default function DatabasesPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newDb, setNewDb] = useState({ name: '', type: 'PostgreSQL' as 'MySQL' | 'PostgreSQL' });
+  const [databases, setDatabases] = useState<Database[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data
-  const databases: Database[] = [
-    {
-      id: '1',
-      name: 'production_db',
-      users: 3,
-      size: '245 MB',
-      type: 'PostgreSQL',
-      createdAt: '2024-01-10',
-    },
-    {
-      id: '2',
-      name: 'test_db',
-      users: 2,
-      size: '89 MB',
-      type: 'PostgreSQL',
-      createdAt: '2024-02-15',
-    },
-    {
-      id: '3',
-      name: 'wordpress_db',
-      users: 1,
-      size: '512 MB',
-      type: 'MySQL',
-      createdAt: '2024-03-20',
-    },
-  ];
+  useEffect(() => {
+    loadDatabases();
+  }, []);
+
+  const loadDatabases = async () => {
+    try {
+      const response = await apiClient.get('/databases');
+      setDatabases(response.data);
+    } catch (error) {
+      console.error('Failed to load databases:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = async () => {
+    try {
+      // Backend requires username and password
+      const payload = {
+        name: newDb.name,
+        type: newDb.type === 'PostgreSQL' ? 'POSTGRESQL' : 'MYSQL',
+        username: `${newDb.name}_user`,
+        password: Math.random().toString(36).slice(2, 10) + 'A1!',
+      };
+
+      await apiClient.post('/databases', payload);
+      setShowAddModal(false);
+      setNewDb({ name: '', type: 'PostgreSQL' });
+      await loadDatabases();
+    } catch (error) {
+      console.error('Failed to create database:', error);
+      alert('Veritabanı oluşturulamadı');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Bu veritabanını silmek istediğinizden emin misiniz?')) return;
+    try {
+      await apiClient.delete(`/databases/${id}`);
+      await loadDatabases();
+    } catch (error) {
+      console.error('Failed to delete database:', error);
+    }
+  };
+
+  if (loading) return <div className="p-8">Yükleniyor...</div>;
+
+  // Add database handler
+  const handleAddDatabase = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDb.name.trim()) return;
+    
+    const db: Database = {
+      id: Date.now().toString(),
+      name: newDb.name.trim(),
+      users: 0,
+      size: '0 MB',
+      type: newDb.type,
+      createdAt: new Date().toISOString(),
+    };
+    
+    setDatabases(prev => [...prev, db]);
+    setNewDb({ name: '', type: 'PostgreSQL' });
+    setShowAddModal(false);
+  };
+
+  // Delete database handler
+  const handleDeleteDatabase = (id: string, name: string) => {
+    if (!confirm(`"${name}" veritabanını silmek istediğinize emin misiniz?`)) return;
+    setDatabases(prev => prev.filter(db => db.id !== id));
+  };
 
   const filteredDatabases = databases.filter((db) =>
     db.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -68,11 +118,77 @@ export default function DatabasesPage() {
             MySQL ve PostgreSQL veritabanlarınızı yönetin
           </p>
         </div>
-        <button className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+        <button 
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+        >
           <PlusIcon className="w-5 h-5 mr-2" />
           Yeni Veritabanı
         </button>
       </div>
+
+      {/* Add Database Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Yeni Veritabanı Ekle</h3>
+              <button 
+                onClick={() => setShowAddModal(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); handleCreate(); }} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Veritabanı Adı
+                </label>
+                <input
+                  type="text"
+                  value={newDb.name}
+                  onChange={(e) => setNewDb(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="my_database"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Sadece harf, rakam ve alt çizgi kullanın
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Veritabanı Türü
+                </label>
+                <select
+                  value={newDb.type}
+                  onChange={(e) => setNewDb(prev => ({ ...prev, type: e.target.value as 'MySQL' | 'PostgreSQL' }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="PostgreSQL">PostgreSQL</option>
+                  <option value="MySQL">MySQL</option>
+                </select>
+              </div>
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                >
+                  Oluştur
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -222,7 +338,10 @@ export default function DatabasesPage() {
                         <button className="p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 rounded transition-colors">
                           <Cog6ToothIcon className="w-5 h-5" />
                         </button>
-                        <button className="p-2 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 rounded transition-colors">
+                        <button
+                          onClick={() => handleDelete(db.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 rounded transition-colors"
+                        >
                           <TrashIcon className="w-5 h-5" />
                         </button>
                       </div>

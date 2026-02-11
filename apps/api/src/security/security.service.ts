@@ -143,4 +143,53 @@ export class SecurityService {
     
     return { message: 'Firewall rule deleted successfully' };
   }
+
+  // Security Scans
+  async findAllScans(accountId: string) {
+    return this.prisma.securityScan.findMany({
+      where: { accountId },
+      orderBy: { startedAt: 'desc' },
+    });
+  }
+
+  async triggerScan(accountId: string, scanType: 'VIRUS' | 'MALWARE' | 'VULNERABILITY' = 'VIRUS') {
+    // Trigger actual scan logic here (ClamAV, etc.)
+    return this.prisma.securityScan.create({
+      data: {
+        accountId,
+        scanType,
+        status: 'IN_PROGRESS',
+      },
+    });
+  }
+
+  async updateScanResult(id: string, data: { 
+    status: 'COMPLETED' | 'FAILED'; 
+    threatsFound?: number; 
+    result?: any 
+  }) {
+    return this.prisma.securityScan.update({
+      where: { id },
+      data: {
+        ...data,
+        completedAt: new Date(),
+      },
+    });
+  }
+
+  async deleteScan(id: string) {
+    const scan = await this.prisma.securityScan.findUnique({
+      where: { id },
+    });
+    
+    if (!scan) {
+      throw new NotFoundException(`Security scan with ID ${id} not found`);
+    }
+
+    await this.prisma.securityScan.delete({
+      where: { id },
+    });
+    
+    return { message: 'Security scan deleted successfully' };
+  }
 }

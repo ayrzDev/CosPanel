@@ -6,6 +6,30 @@ import { CreateDatabaseDto, CreateDatabaseUserDto, GrantPrivilegesDto } from './
 export class DatabasesService {
   constructor(private prisma: PrismaService) {}
 
+  // Helper: Get or create account for customer
+  private async getOrCreateAccountForCustomer(customerId: string): Promise<string> {
+    let account = await this.prisma.account.findFirst({ where: { customerId } });
+
+    if (!account) {
+      const adminUser = await this.prisma.user.findFirst({ where: { role: { in: ['ROOT', 'ADMIN'] } }, orderBy: { createdAt: 'asc' } });
+      if (!adminUser) throw new NotFoundException('No admin user found to create account');
+      account = await this.prisma.account.create({ data: { ownerId: adminUser.id, customerId, plan: 'BASIC', status: 'active' } });
+    }
+
+    return account.id;
+  }
+
+  // Helper: Ensure default admin account exists
+  async getOrCreateDefaultAdminAccount(): Promise<string> {
+    let account = await this.prisma.account.findFirst({ orderBy: { createdAt: 'asc' } });
+    if (!account) {
+      const adminUser = await this.prisma.user.findFirst({ where: { role: { in: ['ROOT', 'ADMIN'] } }, orderBy: { createdAt: 'asc' } });
+      if (!adminUser) throw new NotFoundException('No admin user found');
+      account = await this.prisma.account.create({ data: { ownerId: adminUser.id, plan: 'BASIC', status: 'active' } });
+    }
+    return account.id;
+  }
+
   async findAllDatabases(accountId: string) {
     return this.prisma.managedDatabase.findMany({
       where: { accountId },
@@ -33,10 +57,19 @@ export class DatabasesService {
     return db;
   }
 
-  async createDatabase(accountId: string, dto: CreateDatabaseDto) {
+  async createDatabase(accountId: string | undefined, dto: CreateDatabaseDto, customerId?: string) {
+    let finalAccountId = accountId;
+    if (!finalAccountId && customerId) {
+      finalAccountId = await this.getOrCreateAccountForCustomer(customerId);
+    }
+    if (!finalAccountId) {
+      // As a last resort, create/find a default admin account
+      finalAccountId = await this.getOrCreateDefaultAdminAccount();
+    }
+
     return this.prisma.managedDatabase.create({
       data: {
-        accountId,
+        account: { connect: { id: finalAccountId } },
         name: dto.name,
         type: dto.type || 'MYSQL',
         host: 'localhost',

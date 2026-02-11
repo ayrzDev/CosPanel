@@ -9,7 +9,8 @@ export interface Domain {
 
 export interface CreateDomainDto {
   fqdn: string;
-  accountId: string;
+  accountId?: string;
+  domainType?: 'PRIMARY' | 'ADDON' | 'SUBDOMAIN' | 'PARKED';
 }
 
 export interface UpdateSSLDto {

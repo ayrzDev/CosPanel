@@ -27,8 +27,13 @@ export class DatabasesController {
   @Post()
   @ApiOperation({ summary: 'Create new database' })
   async createDatabase(@Request() req: any, @Body() dto: CreateDatabaseDto) {
-    const accountId = req.user.accounts?.[0]?.id;
-    return this.databasesService.createDatabase(accountId, dto);
+    const accountId = req.user?.accounts?.[0]?.id;
+    const customerId = req.user?.type === 'customer' ? req.user.id : undefined;
+    let finalAccountId = accountId;
+    if (!finalAccountId && (req.user?.role === 'ROOT' || req.user?.role === 'ADMIN')) {
+      finalAccountId = await this.databasesService.getOrCreateDefaultAdminAccount();
+    }
+    return this.databasesService.createDatabase(finalAccountId, dto, customerId);
   }
 
   @Delete(':id')

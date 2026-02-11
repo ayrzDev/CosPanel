@@ -4,7 +4,8 @@ export interface EmailAccount {
   id: string;
   email: string;
   quota: number;
-  used: number;
+  used: number;       // Backend returns as usedSpace, will be mapped
+  usedSpace?: number; // Original backend field
   createdAt: string;
 }
 
@@ -29,6 +30,11 @@ export interface Forwarder {
 export interface CreateForwarderDto {
   source: string;
   destination: string;
+}
+
+export interface UpdateForwarderDto {
+  source?: string;
+  destination?: string;
 }
 
 export interface Autoresponder {
@@ -57,7 +63,11 @@ export const emailApi = {
     const { data } = await apiClient.get('/email/accounts', {
       params: { accountId },
     });
-    return data;
+    // Map usedSpace to used for frontend compatibility
+    return data.map((account: any) => ({
+      ...account,
+      used: account.usedSpace || account.used || 0,
+    }));
   },
 
   getAccount: async (id: string): Promise<EmailAccount> => {
@@ -67,12 +77,19 @@ export const emailApi = {
 
   createAccount: async (dto: CreateEmailAccountDto): Promise<EmailAccount> => {
     const { data } = await apiClient.post('/email/accounts', dto);
-    return data;
+    // Map usedSpace to used for frontend compatibility
+    return {
+      ...data,
+      used: data.usedSpace || data.used || 0,
+    };
   },
 
   updateAccount: async (id: string, dto: UpdateEmailAccountDto): Promise<EmailAccount> => {
     const { data } = await apiClient.put(`/email/accounts/${id}`, dto);
-    return data;
+    return {
+      ...data,
+      used: data.usedSpace || data.used || 0,
+    };
   },
 
   deleteAccount: async (id: string): Promise<void> => {
@@ -87,6 +104,11 @@ export const emailApi = {
 
   createForwarder: async (dto: CreateForwarderDto): Promise<Forwarder> => {
     const { data } = await apiClient.post('/email/forwarders', dto);
+    return data;
+  },
+
+  updateForwarder: async (id: string, dto: UpdateForwarderDto): Promise<Forwarder> => {
+    const { data } = await apiClient.put(`/email/forwarders/${id}`, dto);
     return data;
   },
 

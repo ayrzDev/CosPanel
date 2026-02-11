@@ -1,12 +1,60 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { apiClient } from '@/lib/api-client';
 import { ShieldExclamationIcon } from '@heroicons/react/24/outline';
 
+interface SpamFilter {
+  id: string;
+  spamScore: number;
+  enabled: boolean;
+  whiteList: string[];
+  blackList: string[];
+}
+
 export default function SpamAssassinPage() {
+  const [spamFilter, setSpamFilter] = useState<SpamFilter | null>(null);
+  const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(true);
-  const [spamScore] = useState(5.0);
+  const [spamScore, setSpamScore] = useState(5);
   const [processedToday] = useState({ total: 2456, spam: 187, clean: 2269 });
+
+  useEffect(() => {
+    loadSpamFilter();
+  }, []);
+
+  const loadSpamFilter = async () => {
+    try {
+      const response = await apiClient.get('/email/spam-filter');
+      if (response.data) {
+        setSpamFilter(response.data);
+        setEnabled(response.data.enabled);
+        setSpamScore(response.data.spamScore || 5);
+      }
+    } catch (error) {
+      console.error('Failed to load spam filter:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveConfiguration = async () => {
+    try {
+      await apiClient.put('/email/spam-filter', {
+        isEnabled: enabled,
+        spamScore: spamScore,
+        whitelist: spamFilter?.whiteList || [],
+        blacklist: spamFilter?.blackList || [],
+      });
+      alert('Configuration saved successfully!');
+      loadSpamFilter();
+    } catch (error) {
+      console.error('Failed to save configuration:', error);
+      alert('Failed to save configuration');
+    }
+  };
+
+  if (loading) return <div className="p-8">Yükleniyor...</div>;
 
   return (
     <div className="space-y-6">
@@ -61,8 +109,9 @@ export default function SpamAssassinPage() {
               type="range" 
               min="1" 
               max="10" 
-              step="0.5" 
-              defaultValue={spamScore} 
+              step="1" 
+              value={spamScore}
+              onChange={(e) => setSpamScore(parseInt(e.target.value))}
               className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
             />
             <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -89,7 +138,7 @@ export default function SpamAssassinPage() {
             </div>
           </div>
 
-          <button className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">Save Configuration</button>
+          <button onClick={handleSaveConfiguration} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">Save Configuration</button>
         </div>
       </div>
 

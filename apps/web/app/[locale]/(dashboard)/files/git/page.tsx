@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { apiClient } from '@/lib/api-client';
 import { 
   CodeBracketIcon,
   FolderIcon,
@@ -10,24 +11,45 @@ import {
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 
+interface GitRepo {
+  id: string;
+  name: string;
+  url: string;
+  path: string;
+  branch: string;
+  lastSync?: string;
+}
+
 export default function GitVersionControlPage() {
-  const [repositories] = useState([
-    {
-      id: 1,
-      path: '/home/siyezden/public_html',
-      branch: 'main',
-      lastCommit: '2024-12-03 10:30',
-      status: 'clean',
-      commits: 145,
-    },
-    {
-      id: 2,
-      path: '/home/siyezden/test-site',
-      branch: 'develop',
-      lastCommit: '2024-12-02 15:20',
-      status: 'modified',
-      commits: 87,
-    },
+  const [repositories, setRepositories] = useState<GitRepo[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadRepositories();
+  }, []);
+
+  const loadRepositories = async () => {
+    try {
+      const response = await apiClient.get('/files/git/repos');
+      setRepositories(response.data);
+    } catch (error) {
+      console.error('Failed to load git repos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Bu repository\'yi silmek istediğinizden emin misiniz?')) return;
+    try {
+      await apiClient.delete(`/files/git/repos/${id}`);
+      loadRepositories();
+    } catch (error) {
+      console.error('Failed to delete repo:', error);
+    }
+  };
+
+  if (loading) return <div className="p-8">Yükleniyor...</div>;
   ]);
 
   return (

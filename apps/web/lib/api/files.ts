@@ -95,4 +95,24 @@ export const filesApi = {
     const { data } = await apiClient.get('/files/disk-usage');
     return data;
   },
+
+  // FTP
+  getAllFtp: async (): Promise<any[]> => {
+    const { data } = await apiClient.get('/files/ftp');
+    return data;
+  },
+
+  createFtp: async (dto: { username: string; directory: string; quota?: string; password?: string }) => {
+    const { data } = await apiClient.post('/files/ftp', dto);
+    return data;
+  },
+
+  updateFtp: async (id: string, dto: any) => {
+    const { data } = await apiClient.put(`/files/ftp/${id}`, dto);
+    return data;
+  },
+
+  deleteFtp: async (id: string) => {
+    await apiClient.delete(`/files/ftp/${id}`);
+  },
 };

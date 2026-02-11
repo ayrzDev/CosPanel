@@ -15,6 +15,9 @@ import { HostingPlansModule } from '../hosting-plans/hosting-plans.module';
 import { InvoicesModule } from '../invoices/invoices.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { ServersModule } from '../servers/servers.module';
+import { SoftwareModule } from './software.module';
+import { AdvancedModule } from './advanced.module';
+import { PreferencesModule } from './preferences.module';
 
 @Module({
   imports: [
@@ -32,6 +35,9 @@ import { ServersModule } from '../servers/servers.module';
     HostingPlansModule,
     InvoicesModule,
     TicketsModule,
+    SoftwareModule,
+    AdvancedModule,
+    PreferencesModule,
   ],
   controllers: [HealthController, MetricsController],
   providers: []

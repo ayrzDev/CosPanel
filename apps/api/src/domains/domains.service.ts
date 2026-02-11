@@ -89,6 +89,35 @@ export class DomainsService {
       throw new ConflictException(`Domain ${dto.fqdn} already exists`);
     }
 
+    // Get accountId - if not provided, find or create one
+    let accountId = dto.accountId;
+    if (!accountId) {
+      // Find first account in system or create one for admin
+      let account = await this.prisma.account.findFirst({
+        orderBy: { createdAt: 'asc' },
+      });
+
+      if (!account) {
+        const adminUser = await this.prisma.user.findFirst({
+          where: { role: { in: ['ROOT', 'ADMIN'] } },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        if (!adminUser) {
+          throw new NotFoundException('No admin user found to create account');
+        }
+
+        account = await this.prisma.account.create({
+          data: {
+            ownerId: adminUser.id,
+            plan: 'BASIC',
+            status: 'active',
+          },
+        });
+      }
+      accountId = account.id;
+    }
+
     // Check if customer ID is provided and validate limits
     if (dto.customerId) {
       const customer = await this.prisma.customer.findUnique({
@@ -118,9 +147,86 @@ export class DomainsService {
     return this.prisma.domain.create({
       data: {
         fqdn: dto.fqdn,
-        accountId: dto.accountId,
+        accountId: accountId,
         customerId: dto.customerId || null,
         domainType: dto.domainType as any || null,
+        isPrimary: dto.isPrimary || false,
+        parentDomainId: dto.parentDomainId || null,
+        documentRoot: dto.documentRoot || null,
+      },
+      include: {
+        customer: true,
+        parentDomain: true,
+      }
+    });
+  }
+
+  // Create domain for customer (finds or creates account automatically)
+  async createForCustomer(customerId: string, dto: CreateDomainDto) {
+    const existing = await this.prisma.domain.findUnique({
+      where: { fqdn: dto.fqdn },
+    });
+
+    if (existing) {
+      throw new ConflictException(`Domain ${dto.fqdn} already exists`);
+    }
+
+    // Get or create account for customer
+    let account = await this.prisma.account.findFirst({
+      where: { customerId },
+    });
+
+    if (!account) {
+      // Find admin user to be owner
+      const adminUser = await this.prisma.user.findFirst({
+        where: { role: { in: ['ROOT', 'ADMIN'] } },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      if (!adminUser) {
+        throw new NotFoundException('No admin user found to create account');
+      }
+
+      account = await this.prisma.account.create({
+        data: {
+          ownerId: adminUser.id,
+          customerId,
+          plan: 'BASIC',
+          status: 'active',
+        },
+      });
+    }
+
+    // Validate customer limits
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      include: { hostingPlan: true }
+    });
+
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    const stats = await this.getCustomerStats(customerId);
+    const domainType = dto.domainType || 'ADDON';
+
+    // Check limits based on domain type
+    if (domainType === 'ADDON' && stats.limits.addonDomains !== -1 && stats.addonDomains >= stats.limits.addonDomains) {
+      throw new ConflictException(`Addon domain limit reached (${stats.limits.addonDomains})`);
+    }
+    if (domainType === 'SUBDOMAIN' && stats.limits.subdomains !== -1 && stats.subdomains >= stats.limits.subdomains) {
+      throw new ConflictException(`Subdomain limit reached (${stats.limits.subdomains})`);
+    }
+    if (domainType === 'PARKED' && stats.limits.parkedDomains !== -1 && stats.parkedDomains >= stats.limits.parkedDomains) {
+      throw new ConflictException(`Parked domain limit reached (${stats.limits.parkedDomains})`);
+    }
+
+    return this.prisma.domain.create({
+      data: {
+        fqdn: dto.fqdn,
+        accountId: account.id,
+        customerId,
+        domainType: domainType as any,
         isPrimary: dto.isPrimary || false,
         parentDomainId: dto.parentDomainId || null,
         documentRoot: dto.documentRoot || null,

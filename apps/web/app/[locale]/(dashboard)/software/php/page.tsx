@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { apiClient } from '@/lib/api-client';
 import { 
   CodeBracketIcon, 
   ServerIcon,
@@ -9,8 +10,57 @@ import {
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 
+interface PHPVersion {
+  id: string;
+  path: string;
+  version: string;
+  createdAt: string;
+}
+
 export default function PHPManagerPage() {
   const [selectedVersion, setSelectedVersion] = useState('8.2');
+  const [phpConfigs, setPhpConfigs] = useState<PHPVersion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [formData, setFormData] = useState({ path: '', version: '8.2' });
+
+  useEffect(() => {
+    loadPHPVersions();
+  }, []);
+
+  const loadPHPVersions = async () => {
+    try {
+      const response = await apiClient.get('/software/php/versions');
+      setPhpConfigs(response.data);
+    } catch (error) {
+      console.error('Failed to load PHP versions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await apiClient.post('/software/php/versions', formData);
+      setShowModal(false);
+      setFormData({ path: '', version: '8.2' });
+      loadPHPVersions();
+    } catch (error) {
+      console.error('Failed to set PHP version:', error);
+      alert('PHP sürümü ayarlama başarısız oldu');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Bu PHP sürüm ayarını silmek istediğinizden emin misiniz?')) return;
+    try {
+      await apiClient.delete(`/software/php/versions/${id}`);
+      loadPHPVersions();
+    } catch (error) {
+      console.error('Failed to delete PHP version:', error);
+    }
+  };
   
   const phpVersions = [
     { version: '5.6', status: 'available', eol: true },
@@ -22,11 +72,12 @@ export default function PHPManagerPage() {
     { version: '8.3', status: 'available', eol: false },
   ];
 
-  const domains = [
-    { domain: 'siyezden.com', phpVersion: '8.2', path: '/home/siyezden/public_html' },
-    { domain: 'test.com', phpVersion: '8.1', path: '/home/siyezden/test' },
-    { domain: 'old.com', phpVersion: '7.4', path: '/home/siyezden/old' },
-  ];
+  const domains = phpConfigs.map(php => ({
+    domain: php.path,
+    phpVersion: php.version,
+    path: php.path,
+    id: php.id
+  }));
 
   const phpExtensions = [
     { name: 'mysqli', status: true, description: 'MySQL Database Support' },
@@ -125,8 +176,14 @@ export default function PHPManagerPage() {
 
       {/* Domain PHP Versions */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Domain PHP Versiyonları</h2>
+          <button
+            onClick={() => setShowModal(true)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+          >
+            Yeni Ekle
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -173,8 +230,11 @@ export default function PHPManagerPage() {
                     {domain.path}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
-                      Kaydet
+                    <button 
+                      onClick={() => handleDelete(domain.id)}
+                      className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    >
+                      Sil
                     </button>
                   </td>
                 </tr>
@@ -294,6 +354,62 @@ export default function PHPManagerPage() {
           </div>
         </div>
       </div>
+      
+      {/* Add PHP Version Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">PHP Sürümü Ayarla</h2>
+            <form onSubmit={handleSubmit}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Dizin Yolu</label>
+                <input
+                  type="text"
+                  value={formData.path}
+                  onChange={(e) => setFormData({ ...formData, path: e.target.value })}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="/public_html/app"
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">PHP Sürümü</label>
+                <select
+                  value={formData.version}
+                  onChange={(e) => setFormData({ ...formData, version: e.target.value })}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="5.6">PHP 5.6</option>
+                  <option value="7.0">PHP 7.0</option>
+                  <option value="7.4">PHP 7.4</option>
+                  <option value="8.0">PHP 8.0</option>
+                  <option value="8.1">PHP 8.1</option>
+                  <option value="8.2">PHP 8.2</option>
+                  <option value="8.3">PHP 8.3</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowModal(false);
+                    setFormData({ path: '', version: '8.2' });
+                  }}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  Ayarla
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

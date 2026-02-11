@@ -1,12 +1,47 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { apiClient } from '@/lib/api-client';
 import { ShieldCheckIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
+
+interface SpamFilter {
+  id: string;
+  spamScore: number;
+  enabled: boolean;
+  whiteList: string[];
+  blackList: string[];
+}
 
 export default function AuthenticationPage() {
   const [spfStatus] = useState({ enabled: true, record: 'v=spf1 +a +mx +ip4:192.168.1.1 ~all' });
   const [dkimStatus] = useState({ enabled: true, selector: 'default._domainkey.siyezden.com' });
   const [dmarcStatus] = useState({ enabled: true, policy: 'quarantine', rua: 'mailto:dmarc@siyezden.com' });
+  const [spamFilter, setSpamFilter] = useState<SpamFilter | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadSpamFilter();
+  }, []);
+
+  const loadSpamFilter = async () => {
+    try {
+      const response = await apiClient.get('/email/spam-filter');
+      setSpamFilter(response.data);
+    } catch (error) {
+      console.error('Failed to load spam filter:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateSpamFilter = async (data: Partial<SpamFilter>) => {
+    try {
+      await apiClient.put('/email/spam-filter', data);
+      loadSpamFilter();
+    } catch (error) {
+      console.error('Failed to update spam filter:', error);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -85,6 +120,32 @@ export default function AuthenticationPage() {
           <p className="text-sm text-gray-700 dark:text-gray-300"><strong>Policy:</strong> {dmarcStatus.policy}</p>
           <p className="text-sm text-gray-700 dark:text-gray-300"><strong>RUA:</strong> {dmarcStatus.rua}</p>
         </div>
+      </div>
+
+      {/* Spam Filter */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              Spam Filter Settings
+              {spamFilter?.enabled ? (
+                <CheckCircleIcon className="w-5 h-5 text-green-600" />
+              ) : (
+                <XCircleIcon className="w-5 h-5 text-red-600" />
+              )}
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Spam puanı ve whitelist/blacklist ayarları</p>
+          </div>
+          <button onClick={() => handleUpdateSpamFilter({ isEnabled: !spamFilter?.enabled })} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+            {spamFilter?.enabled ? 'Disable' : 'Enable'}
+          </button>
+        </div>
+        {spamFilter && (
+          <div className="bg-gray-50 dark:bg-gray-900 rounded p-4 space-y-2">
+            <p className="text-sm text-gray-700 dark:text-gray-300"><strong>Spam Score:</strong> {spamFilter.spamScore}</p>
+            <p className="text-sm text-gray-700 dark:text-gray-300"><strong>Status:</strong> {spamFilter.enabled ? 'Enabled' : 'Disabled'}</p>
+          </div>
+        )}
       </div>
     </div>
   );

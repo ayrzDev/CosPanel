@@ -83,4 +83,31 @@ export class SecurityController {
   async deleteFirewallRule(@Param('id') id: string) {
     return this.securityService.deleteFirewallRule(id);
   }
+
+  // Security Scans
+  @Get('scans')
+  @ApiOperation({ summary: 'Get all security scans' })
+  async findAllScans(@Request() req: any) {
+    const accountId = req.user.type === 'customer' ? req.user.accountId : req.user.accounts?.[0]?.id;
+    return this.securityService.findAllScans(accountId);
+  }
+
+  @Post('scans/trigger')
+  @ApiOperation({ summary: 'Trigger a new security scan' })
+  async triggerScan(@Request() req: any, @Body() body: { scanType?: 'VIRUS' | 'MALWARE' | 'VULNERABILITY' }) {
+    const accountId = req.user.type === 'customer' ? req.user.accountId : req.user.accounts?.[0]?.id;
+    return this.securityService.triggerScan(accountId, body.scanType);
+  }
+
+  @Put('scans/:id')
+  @ApiOperation({ summary: 'Update scan result' })
+  async updateScanResult(@Param('id') id: string, @Body() body: any) {
+    return this.securityService.updateScanResult(id, body);
+  }
+
+  @Delete('scans/:id')
+  @ApiOperation({ summary: 'Delete security scan' })
+  async deleteScan(@Param('id') id: string) {
+    return this.securityService.deleteScan(id);
+  }
 }

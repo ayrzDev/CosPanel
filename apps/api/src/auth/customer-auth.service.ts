@@ -14,6 +14,30 @@ export class CustomerAuthService {
     return crypto.createHash('sha256').update(password).digest('hex');
   }
 
+  // Ensure customer has an account, create if not exists
+  private async ensureCustomerAccount(customerId: string, adminId: string): Promise<string> {
+    // Check if customer already has an account
+    const existingAccount = await this.prisma.account.findFirst({
+      where: { customerId },
+    });
+    
+    if (existingAccount) {
+      return existingAccount.id;
+    }
+    
+    // Create new account for customer
+    const newAccount = await this.prisma.account.create({
+      data: {
+        ownerId: adminId,
+        customerId: customerId,
+        plan: 'BASIC',
+        status: 'active',
+      },
+    });
+    
+    return newAccount.id;
+  }
+
   async login(dto: { username: string; password: string }) {
     const customer = await this.prisma.customer.findFirst({
       where: {
@@ -30,6 +54,13 @@ export class CustomerAuthService {
             bandwidthMB: true,
           },
         },
+        accounts: {
+          select: {
+            id: true,
+            plan: true,
+            status: true,
+          },
+        },
       },
     });
 
@@ -43,12 +74,27 @@ export class CustomerAuthService {
       throw new UnauthorizedException('Account is not active');
     }
 
+    // Ensure customer has an account (create if not exists)
+    let accountId = customer.accounts?.[0]?.id;
+    if (!accountId) {
+      // Use customer's admin as owner, or find a root user
+      const adminUser = await this.prisma.user.findFirst({
+        where: { role: { in: ['ROOT', 'ADMIN'] } },
+        orderBy: { createdAt: 'asc' },
+      });
+      
+      if (adminUser) {
+        accountId = await this.ensureCustomerAccount(customer.id, adminUser.id);
+      }
+    }
+
     // Generate JWT token
     const payload = {
       sub: customer.id,
       username: customer.username,
       email: customer.email,
       type: 'customer',
+      accountId, // Include accountId in token
     };
     const accessToken = this.jwtService.sign(payload);
 

@@ -61,6 +61,7 @@ model Account {
   emailForwarders   EmailForwarder[]
   emailAutoresponders EmailAutoresponder[]
   emailFilters      EmailFilter[]
+  mailingLists      MailingList[]
   managedDatabases  ManagedDatabase[]
   ftpAccounts       FTPAccount[]
   diskUsage         DiskUsage?
@@ -69,6 +70,21 @@ model Account {
   bandwidthMetrics  BandwidthMetric[]
   cronJobs          CronJob[]
   terminalSessions  TerminalSession[]
+  files             File[]
+  gitRepos          GitRepo[]
+  webDisks          WebDisk[]
+  boxTrappers       BoxTrapper[]
+  emailDefault      EmailDefault?
+  emailTracking     EmailTracking[]
+  calendars         Calendar[]
+  emailEncryption   EmailEncryption[]
+  spamFilters       SpamFilter[]
+  securityScans     SecurityScan[]
+  phpVersions       PHPVersion[]
+  installedApps     InstalledApp[]
+  errorPages        ErrorPage[]
+  mimeTypes         MimeType[]
+  userPreferences   UserPreference?
   customerId        String?
   customer          Customer? @relation(fields: [customerId], references: [id])
   homeDirectory     String?   @db.VarChar(255) // /home/username
@@ -119,6 +135,7 @@ model Domain {
   sslCertificates   SSLCertificate[]
   visitorMetrics    VisitorMetric[]
   errorLogs         ErrorLog[]
+  aliases           DomainAlias[]
   
   @@index([customerId])
   @@index([domainType])
@@ -279,6 +296,58 @@ model EmailFilter {
   @@index([accountId])
 }
 
+model MailingList {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name        String
+  email       String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  members     MailingListMember[]
+
+  @@index([accountId])
+}
+
+model MailingListMember {
+  id            String   @id @default(uuid())
+  mailingListId String
+  mailingList   MailingList @relation(fields: [mailingListId], references: [id], onDelete: Cascade)
+  email         String
+  subscribedAt  DateTime @default(now())
+  isActive      Boolean  @default(true)
+
+  @@index([mailingListId])
+}
+
+model DomainAlias {
+  id          String   @id @default(uuid())
+  domainId    String
+  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  alias       String   @unique
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([domainId])
+}
+
+model BoxTrapper {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  email       String
+  whitelist   Json     @default("[]")
+  blacklist   Json     @default("[]")
+  challenge   String?  // challenge question/answer or token
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([accountId])
+  @@index([email])
+}
+
 // ==================== DATABASE MODELS ====================
 
 model ManagedDatabase {
@@ -416,6 +485,212 @@ model DiskUsage {
   fileCount   Int      @default(0)
   lastScan    DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model EmailDefault {
+  id          String   @id @default(uuid())
+  accountId   String   @unique
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  action      String   @default("forward") // forward, discard, fail
+  forwardTo   String?  @db.VarChar(255)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+model EmailTracking {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  email       String
+  subject     String?
+  recipient   String
+  status      String   // sent, delivered, bounced, opened
+  sentAt      DateTime @default(now())
+  deliveredAt DateTime?
+  openedAt    DateTime?
+
+  @@index([accountId])
+  @@index([email])
+  @@index([status])
+}
+
+model Calendar {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name        String
+  email       String
+  timezone    String   @default("UTC")
+  isPublic    Boolean  @default(false)
+  events      Json     @default("[]")
+  createdAt   DateTime @default(now())
+
+  @@index([accountId])
+}
+
+model EmailEncryption {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  email       String   @unique
+  publicKey   String?  @db.Text
+  privateKey  String?  @db.Text
+  enabled     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([accountId])
+}
+
+model SpamFilter {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  email       String
+  spamScore   Int      @default(5)
+  whiteList   Json     @default("[]")
+  blackList   Json     @default("[]")
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([accountId])
+  @@index([email])
+}
+
+model SecurityScan {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  scanType    String   // virus, malware, vulnerability
+  status      String   // pending, running, completed, failed
+  findings    Json     @default("[]")
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+
+  @@index([accountId])
+  @@index([status])
+}
+
+model PHPVersion {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  version     String
+  isActive    Boolean  @default(false)
+  iniSettings Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([accountId])
+}
+
+model InstalledApp {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name        String
+  version     String?
+  path        String
+  installDate DateTime @default(now())
+
+  @@index([accountId])
+}
+
+model ErrorPage {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  errorCode   Int
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+
+  @@unique([accountId, errorCode])
+  @@index([accountId])
+}
+
+model MimeType {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  extension   String
+  mimeType    String
+  createdAt   DateTime @default(now())
+
+  @@unique([accountId, extension])
+  @@index([accountId])
+}
+
+model UserPreference {
+  id          String   @id @default(uuid())
+  accountId   String   @unique
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  language    String   @default("en")
+  timezone    String   @default("UTC")
+  theme       String   @default("light")
+  contactInfo Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+model File {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  path        String   @db.VarChar(1000) // relative path in home directory
+  name        String   @db.VarChar(500)
+  size        Int      // bytes
+  mimeType    String?  @db.VarChar(200)
+  isPublic    Boolean  @default(false)
+  checksum    String?  @db.VarChar(255)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  images      Image[]
+
+  @@index([accountId])
+  @@index([path])
+}
+
+model Image {
+  id          String   @id @default(uuid())
+  fileId      String
+  file        File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  width       Int?
+  height      Int?
+  blurhash    String?
+  createdAt   DateTime @default(now())
+
+  @@index([fileId])
+}
+
+model GitRepo {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name        String
+  remoteUrl   String?
+  branch      String?  @default("main")
+  lastCommit  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([accountId, name])
+  @@index([accountId])
+}
+
+model WebDisk {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  mountPoint  String   @db.VarChar(255)
+  protocol    String   @default("webdav")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
 }
 
 // ==================== METRICS MODELS ====================

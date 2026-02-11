@@ -11,6 +11,7 @@ import {
   TrashIcon,
   CodeBracketIcon,
   ChartBarIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { CheckCircleIcon, XCircleIcon, ClockIcon } from '@heroicons/react/24/solid';
 
@@ -30,9 +31,11 @@ interface Site {
 
 export default function SitesPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newSite, setNewSite] = useState({ name: '', domain: '', framework: 'NEXT' as Framework, gitRepo: '' });
 
-  // Mock data
-  const sites: Site[] = [
+  // Mock data - state olarak tutuyoruz ki ekleyip silebilelim
+  const [sites, setSites] = useState<Site[]>([
     {
       id: '1',
       name: 'Main Website',
@@ -71,7 +74,33 @@ export default function SitesPage() {
       lastDeploy: '2024-11-26T09:15:00',
       createdAt: '2023-12-15',
     },
-  ];
+  ]);
+
+  // Add site handler
+  const handleAddSite = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSite.name.trim() || !newSite.domain.trim()) return;
+    
+    const site: Site = {
+      id: Date.now().toString(),
+      name: newSite.name.trim(),
+      domain: newSite.domain.trim(),
+      framework: newSite.framework,
+      gitRepo: newSite.gitRepo.trim() || undefined,
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+    };
+    
+    setSites(prev => [...prev, site]);
+    setNewSite({ name: '', domain: '', framework: 'NEXT', gitRepo: '' });
+    setShowAddModal(false);
+  };
+
+  // Delete site handler
+  const handleDeleteSite = (id: string, name: string) => {
+    if (!confirm(`"${name}" sitesini silmek istediğinize emin misiniz?`)) return;
+    setSites(prev => prev.filter(s => s.id !== id));
+  };
 
   const filteredSites = sites.filter(
     (site) =>
@@ -140,11 +169,102 @@ export default function SitesPage() {
             Web sitelerinizi yönetin, deploy edin ve izleyin
           </p>
         </div>
-        <button className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+        <button 
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+        >
           <PlusIcon className="w-5 h-5 mr-2" />
           Yeni Site
         </button>
       </div>
+
+      {/* Add Site Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Yeni Site Ekle</h3>
+              <button 
+                onClick={() => setShowAddModal(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={handleAddSite} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Site Adı
+                </label>
+                <input
+                  type="text"
+                  value={newSite.name}
+                  onChange={(e) => setNewSite(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="My Website"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Domain
+                </label>
+                <input
+                  type="text"
+                  value={newSite.domain}
+                  onChange={(e) => setNewSite(prev => ({ ...prev, domain: e.target.value }))}
+                  placeholder="example.com"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Framework
+                </label>
+                <select
+                  value={newSite.framework}
+                  onChange={(e) => setNewSite(prev => ({ ...prev, framework: e.target.value as Framework }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="NEXT">Next.js</option>
+                  <option value="REACT">React</option>
+                  <option value="VUE">Vue</option>
+                  <option value="NODE">Node.js</option>
+                  <option value="STATIC">Static</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Git Repository (Opsiyonel)
+                </label>
+                <input
+                  type="text"
+                  value={newSite.gitRepo}
+                  onChange={(e) => setNewSite(prev => ({ ...prev, gitRepo: e.target.value }))}
+                  placeholder="github.com/user/repo"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                >
+                  Ekle
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -294,6 +414,7 @@ export default function SitesPage() {
                   </button>
                 </div>
                 <button
+                  onClick={() => handleDeleteSite(site.id, site.name)}
                   className="p-2 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 rounded transition-colors"
                   title="Sil"
                 >

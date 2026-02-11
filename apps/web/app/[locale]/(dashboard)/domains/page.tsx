@@ -8,6 +8,7 @@ import {
   ShieldCheckIcon,
   Cog6ToothIcon,
   TrashIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { CheckCircleIcon, XCircleIcon, ClockIcon } from '@heroicons/react/24/solid';
 import { domainsApi, type Domain } from '@/lib/api';
@@ -19,6 +20,11 @@ export default function DomainsPage() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Modal states
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
+  const [newDomain, setNewDomain] = useState({ fqdn: '', domainType: 'ADDON' });
 
   // Fetch domains from backend
   useEffect(() => {
@@ -38,6 +44,43 @@ export default function DomainsPage() {
 
     fetchDomains();
   }, []);
+
+  // Add domain handler
+  const handleAddDomain = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDomain.fqdn.trim()) return;
+    
+    setAddLoading(true);
+    setError(null);
+    
+    try {
+      const created = await domainsApi.create({
+        fqdn: newDomain.fqdn.trim(),
+        domainType: newDomain.domainType as 'PRIMARY' | 'ADDON' | 'SUBDOMAIN' | 'PARKED',
+      });
+      setDomains(prev => [...prev, created]);
+      setNewDomain({ fqdn: '', domainType: 'ADDON' });
+      setShowAddModal(false);
+    } catch (err: any) {
+      console.error('Error adding domain:', err);
+      setError(err?.response?.data?.message || 'Domain eklenirken hata oluştu');
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
+  // Delete domain handler
+  const handleDeleteDomain = async (id: string, fqdn: string) => {
+    if (!confirm(`"${fqdn}" domain'ini silmek istediğinize emin misiniz?`)) return;
+    
+    try {
+      await domainsApi.delete(id);
+      setDomains(prev => prev.filter(d => d.id !== id));
+    } catch (err: any) {
+      console.error('Error deleting domain:', err);
+      setError(err?.response?.data?.message || 'Domain silinirken hata oluştu');
+    }
+  };
 
   const filteredDomains = domains.filter((domain) =>
     domain.fqdn.toLowerCase().includes(searchQuery.toLowerCase())
@@ -93,11 +136,76 @@ export default function DomainsPage() {
             Alan adlarınızı yönetin ve SSL sertifikalarını kontrol edin
           </p>
         </div>
-        <button className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+        <button 
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+        >
           <PlusIcon className="w-5 h-5 mr-2" />
           Yeni Domain
         </button>
       </div>
+
+      {/* Add Domain Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Yeni Domain Ekle</h3>
+              <button 
+                onClick={() => setShowAddModal(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={handleAddDomain} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Domain Adı
+                </label>
+                <input
+                  type="text"
+                  value={newDomain.fqdn}
+                  onChange={(e) => setNewDomain(prev => ({ ...prev, fqdn: e.target.value }))}
+                  placeholder="ornek.com"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Domain Türü
+                </label>
+                <select
+                  value={newDomain.domainType}
+                  onChange={(e) => setNewDomain(prev => ({ ...prev, domainType: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="ADDON">Addon Domain</option>
+                  <option value="SUBDOMAIN">Subdomain</option>
+                  <option value="PARKED">Parked (Alias)</option>
+                </select>
+              </div>
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  disabled={addLoading}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {addLoading ? 'Ekleniyor...' : 'Ekle'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Error Alert */}
       {error && (
@@ -241,7 +349,10 @@ export default function DomainsPage() {
                         <button className="p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 rounded transition-colors">
                           <Cog6ToothIcon className="w-5 h-5" />
                         </button>
-                        <button className="p-2 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 rounded transition-colors">
+                        <button 
+                          onClick={() => handleDeleteDomain(domain.id, domain.fqdn)}
+                          className="p-2 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 rounded transition-colors"
+                        >
                           <TrashIcon className="w-5 h-5" />
                         </button>
                       </div>

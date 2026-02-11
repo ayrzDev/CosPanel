@@ -13,7 +13,10 @@ export const apiClient = axios.create({
 // Request interceptor for adding auth token
 apiClient.interceptors.request.use(
   (config) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    // Try customer_token first, then accessToken for admin
+    const token = typeof window !== 'undefined' 
+      ? (localStorage.getItem('customer_token') || localStorage.getItem('accessToken')) 
+      : null;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -31,6 +34,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       // Token expired, redirect to login
       if (typeof window !== 'undefined') {
+        localStorage.removeItem('customer_token');
         localStorage.removeItem('accessToken');
           // try to preserve locale in the redirect: use first path segment or fallback to default 'tr'
           const locale = window.location.pathname.split('/')[1] || 'tr';

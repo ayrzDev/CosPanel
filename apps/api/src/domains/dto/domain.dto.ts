@@ -6,9 +6,10 @@ export class CreateDomainDto {
   @IsString()
   fqdn: string;
 
-  @ApiProperty({ example: '00000000-0000-0000-0000-000000000000' })
+  @ApiProperty({ example: '00000000-0000-0000-0000-000000000000', required: false })
+  @IsOptional()
   @IsString()
-  accountId: string;
+  accountId?: string;
 
   @ApiProperty({ example: '00000000-0000-0000-0000-000000000001', required: false })
   @IsOptional()
